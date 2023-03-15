@@ -1,0 +1,91 @@
+import sys
+import glob
+import math
+import pandas as pd
+import numpy as np
+import argparse
+import re
+import matplotlib.pyplot as plt
+from matplotlib import colors
+from seaborn.widgets import color_palette
+import statsmodels.api as sm
+import csv
+
+def main(input_file_path, color_palette):
+  ### open and read IDP data file ###
+  data = []
+  count = 0
+  with open(input_file_path, mode="r") as infile:
+    reader = csv.reader(infile, delimiter="\n")
+    for row in reader:
+      if len(row) == 1:
+        data.append(re.split(',', row[0])) #pass over res and AA
+      else:
+        data.append(row)
+  infile.close()
+  
+  def get_row_floats(data, row):
+    return list(map(lambda x: float(x[row]), data))
+    print(f'Data: {data}\n\n')
+  shift = get_row_floats(data[1:], 0) #def z as CO shift
+  monomer = get_row_floats(data[1:], 1) #def w as N shift
+  nanodisc = get_row_floats(data[1:], 2) #def w as N shift
+  target = get_row_floats(data[1:], 3) #def w as N shift // row number is variable based on what column experimental data is found in in data file
+  
+  area_nanodisc = np.trapz(nanodisc, shift)
+  area_monomer = np.trapz(monomer, shift)
+  area_target = np.trapz(target,shift)
+
+  ### linear regression ###
+  data = {'x1': nanodisc/area_nanodisc, 'x2': monomer/area_monomer, 'y': target/area_target} #define input variables
+  df = pd.DataFrame(data)
+  x = df[['x1', 'x2']]
+  y = df['y']
+  
+  model = sm.GLS(y,x) #run a generalized least squares regression
+  results = model.fit()
+  weights = results.params
+  print(results.summary())
+  
+  ### weight data based on GLS output ###
+  weighted_nano = []
+  weighted_mono = []
+  for i in range(len(nanodisc)):
+    a = nanodisc[i-1]*weights[0] #constant here is coefficient of GLS output and is best manually input after running the regression once
+    b = monomer[i-1]*weights[1]
+    weighted_nano.append(a)
+    weighted_mono.append(b)
+
+  ### initiate plotting ###
+  fig, axs = plt.subplots(1, 1, sharey=False, tight_layout=True,figsize=(7,3))
+  axs.set_xlim(0,200)
+  axs.set_xlabel('ppm', labelpad=1.0)
+  axs.invert_xaxis()
+  
+  ### generate plots ###
+  a = plt.plot(shift,weighted_nano/-area_nanodisc, label = 'nanodisc')
+  print(a)
+  b = plt.plot(shift,weighted_mono/-area_monomer, label = 'monomer')
+  print(b)
+  plt.plot(shift,target/-area_target, label = 'experimental', color='Black')
+  plt.plot(shift,np.add(weighted_nano/-area_nanodisc,weighted_mono/-area_monomer), label = 'combined')
+
+  ### integrate each component and generate the percent contribution to the best fit ###
+  area_nanodisc = np.trapz(weighted_nano/area_nanodisc, shift)
+  area_monomer = np.trapz(weighted_mono/area_monomer, shift)
+  print('Area under nanodisc curve:', (area_nanodisc/np.add(area_nanodisc,area_monomer))*100)
+  print('Area under monomer curve:', (area_monomer/np.add(area_nanodisc,area_monomer))*100)
+
+
+print("Enter the file path for AA, file path for experimental data, subplot number, and amino acid, separated by commas, or \'Z\' to quit: ")
+quit = False
+while not quit:
+  inputs = input()
+  if inputs.upper() == 'Z':
+    quit = True
+  else:
+    inputs = inputs.split(',')
+    input_file_path = inputs[0]
+    color_palette = inputs[1]
+    main(input_file_path, color_palette) 
+    print("Enter the file path for AA, file path for experimental data, subplot number, and amino acid, separated by commas, or \'Z\' to quit: ")
