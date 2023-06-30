@@ -1,4 +1,4 @@
-```import sys
+import sys
 import glob
 import math
 import pandas as pd
@@ -88,4 +88,4 @@ while not quit:
     input_file_path = inputs[0]
     color_palette = inputs[1]
     main(input_file_path, color_palette) 
-    print("Enter the file path for AA, file path for experimental data, subplot number, and amino acid, separated by commas, or \'Z\' to quit: ")```
+    print("Enter the file path for AA, file path for experimental data, subplot number, and amino acid, separated by commas, or \'Z\' to quit: ")
